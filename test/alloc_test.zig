@@ -4,6 +4,8 @@ const std = @import("std");
 const warn = std.debug.warn;
 const tree = @import("binary_trees.zig");
 
+const dlmalloc = @import("../dlmalloc_wrapper.zig");
+
 // Time measuring
 const c = @cImport({
     @cInclude("time.h");
@@ -33,4 +35,5 @@ pub fn testcase(comptime name: []const u8, allocator: &std.mem.Allocator) -> %vo
 
 pub fn main() -> %void {
     try testcase("c", std.heap.c_allocator);
+    try testcase("dlmalloc", dlmalloc.dlmalloc_allocator);
 }
