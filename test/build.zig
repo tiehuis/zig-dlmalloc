@@ -7,16 +7,13 @@ pub fn build(b: &Builder) -> %void {
 
     exe.linkSystemLibrary("c");
 
+    const dlmalloc_zig_obj = b.addObject("dlmalloc.zig.o", "../dlmalloc.zig");
+    exe.addObject(dlmalloc_zig_obj);
+
     const dlmalloc_c_obj = b.addCObject("dlmalloc.c.o", "../dlmalloc.c");
     exe.addObject(dlmalloc_c_obj);
-
-    const dlmalloc_zig_obj = b.addObject("dlmalloc.zig.o", "../dlmalloc.zig");
-    // TODO: Options aren't being added to command-line?
-    const cflags = [][]const u8 {
-        "-DUSE_DL_PREFIX",
-    };
-    dlmalloc_zig_obj.addCompileFlags(cflags);
-    exe.addObject(dlmalloc_zig_obj);
+    // We require the zig-generated headers
+    dlmalloc_c_obj.step.dependOn(&dlmalloc_zig_obj.step);
 
     exe.setOutputPath("./alloc_test");
 
