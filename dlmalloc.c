@@ -87,9 +87,6 @@
 #ifndef MALLOC_ALIGNMENT
 #define MALLOC_ALIGNMENT ((size_t)(2 * sizeof(void *)))
 #endif  /* MALLOC_ALIGNMENT */
-#ifndef FOOTERS
-#define FOOTERS 0
-#endif  /* FOOTERS */
 #ifndef ABORT
 #define ABORT  abort()
 #endif  /* ABORT */
@@ -100,12 +97,6 @@
 #define PROCEED_ON_ERROR 0
 #endif  /* PROCEED_ON_ERROR */
 
-#ifndef INSECURE
-#define INSECURE 0
-#endif  /* INSECURE */
-#ifndef MALLOC_INSPECT_ALL
-#define MALLOC_INSPECT_ALL 0
-#endif  /* MALLOC_INSPECT_ALL */
 #ifndef HAVE_MMAP
 #define HAVE_MMAP 1
 #endif  /* HAVE_MMAP */
@@ -234,7 +225,6 @@ extern "C" {
 #define dlmalloc_max_footprint malloc_max_footprint
 #define dlmalloc_footprint_limit malloc_footprint_limit
 #define dlmalloc_set_footprint_limit malloc_set_footprint_limit
-#define dlmalloc_inspect_all   malloc_inspect_all
 #define dlindependent_calloc   independent_calloc
 #define dlindependent_comalloc independent_comalloc
 #define dlbulk_free            bulk_free
@@ -414,40 +404,6 @@ DLMALLOC_EXPORT size_t dlmalloc_footprint_limit();
   retroactively deallocate existing used memory.
 */
 DLMALLOC_EXPORT size_t dlmalloc_set_footprint_limit(size_t bytes);
-
-#if MALLOC_INSPECT_ALL
-/*
-  malloc_inspect_all(void(*handler)(void *start,
-                                    void *end,
-                                    size_t used_bytes,
-                                    void* callback_arg),
-                      void* arg);
-  Traverses the heap and calls the given handler for each managed
-  region, skipping all bytes that are (or may be) used for bookkeeping
-  purposes.  Traversal does not include include chunks that have been
-  directly memory mapped. Each reported region begins at the start
-  address, and continues up to but not including the end address.  The
-  first used_bytes of the region contain allocated data. If
-  used_bytes is zero, the region is unallocated. The handler is
-  invoked with the given callback argument. If locks are defined, they
-  are held during the entire traversal. It is a bad idea to invoke
-  other malloc functions from within the handler.
-
-  For example, to count the number of in-use chunks with size greater
-  than 1000, you could write:
-  static int count = 0;
-  void count_chunks(void* start, void* end, size_t used, void* arg) {
-    if (used >= 1000) ++count;
-  }
-  then:
-    malloc_inspect_all(count_chunks, NULL);
-
-  malloc_inspect_all is compiled only if MALLOC_INSPECT_ALL is defined.
-*/
-DLMALLOC_EXPORT void dlmalloc_inspect_all(void(*handler)(void*, void *, size_t, void*),
-                           void* arg);
-
-#endif /* MALLOC_INSPECT_ALL */
 
 /*
   independent_calloc(size_t n_elements, size_t element_size, void* chunks[]);
@@ -1417,11 +1373,7 @@ typedef unsigned int flag_t;           /* The type of various bit flag sets */
 
 #define MCHUNK_SIZE         (sizeof(mchunk))
 
-#if FOOTERS
-#define CHUNK_OVERHEAD      (TWO_SIZE_T_SIZES)
-#else /* FOOTERS */
 #define CHUNK_OVERHEAD      (SIZE_T_SIZE)
-#endif /* FOOTERS */
 
 /* MMapped chunks need a second word of overhead ... */
 #define MMAP_CHUNK_OVERHEAD (TWO_SIZE_T_SIZES)
@@ -2218,7 +2170,6 @@ static size_t traverse_and_check(mstate m);
   next, etc). This turns out to be cheaper than relying on hashes.
 */
 
-#if !INSECURE
 /* Check if address a is at least as high as any from MORECORE or MMAP */
 #define ok_address(M, a) ((char*)(a) >= (M)->least_addr)
 /* Check if address of next chunk n is higher than base chunk p */
@@ -2228,34 +2179,16 @@ static size_t traverse_and_check(mstate m);
 /* Check if p has its pinuse bit on */
 #define ok_pinuse(p)     pinuse(p)
 
-#else /* !INSECURE */
-#define ok_address(M, a) (1)
-#define ok_next(b, n)    (1)
-#define ok_inuse(p)      (1)
-#define ok_pinuse(p)     (1)
-#endif /* !INSECURE */
-
-#if (FOOTERS && !INSECURE)
-/* Check if (alleged) mstate m has expected magic field */
-#define ok_magic(M)      ((M)->magic == mparams.magic)
-#else  /* (FOOTERS && !INSECURE) */
 #define ok_magic(M)      (1)
-#endif /* (FOOTERS && !INSECURE) */
 
 /* In gcc, use __builtin_expect to minimize impact of checks */
-#if !INSECURE
 #if defined(__GNUC__) && __GNUC__ >= 3
 #define RTCHECK(e)  __builtin_expect(e, 1)
 #else /* GNUC */
 #define RTCHECK(e)  (e)
 #endif /* GNUC */
-#else /* !INSECURE */
-#define RTCHECK(e)  (1)
-#endif /* !INSECURE */
 
 /* macros to set up inuse chunks with or without footers */
-
-#if !FOOTERS
 
 #define mark_inuse_foot(M,p,s)
 
@@ -2274,32 +2207,6 @@ static size_t traverse_and_check(mstate m);
 /* Set size, cinuse and pinuse bit of this chunk */
 #define set_size_and_pinuse_of_inuse_chunk(M, p, s)\
   ((p)->head = (s|PINUSE_BIT|CINUSE_BIT))
-
-#else /* FOOTERS */
-
-/* Set foot of inuse chunk to be xor of mstate and seed */
-#define mark_inuse_foot(M,p,s)\
-  (((mchunkptr)((char*)(p) + (s)))->prev_foot = ((size_t)(M) ^ mparams.magic))
-
-#define get_mstate_for(p)\
-  ((mstate)(((mchunkptr)((char*)(p) +\
-    (chunksize(p))))->prev_foot ^ mparams.magic))
-
-#define set_inuse(M,p,s)\
-  ((p)->head = (((p)->head & PINUSE_BIT)|s|CINUSE_BIT),\
-  (((mchunkptr)(((char*)(p)) + (s)))->head |= PINUSE_BIT), \
-  mark_inuse_foot(M,p,s))
-
-#define set_inuse_and_pinuse(M,p,s)\
-  ((p)->head = (s|PINUSE_BIT|CINUSE_BIT),\
-  (((mchunkptr)(((char*)(p)) + (s)))->head |= PINUSE_BIT),\
- mark_inuse_foot(M,p,s))
-
-#define set_size_and_pinuse_of_inuse_chunk(M, p, s)\
-  ((p)->head = (s|PINUSE_BIT|CINUSE_BIT),\
-  mark_inuse_foot(M, p, s))
-
-#endif /* !FOOTERS */
 
 /* ---------------------------- setting mparams -------------------------- */
 
@@ -3805,15 +3712,7 @@ void dlfree(void* mem) {
 
   if (mem != 0) {
     mchunkptr p  = mem2chunk(mem);
-#if FOOTERS
-    mstate fm = get_mstate_for(p);
-    if (!ok_magic(fm)) {
-      USAGE_ERROR_ACTION(fm, p);
-      return;
-    }
-#else /* FOOTERS */
 #define fm gm
-#endif /* FOOTERS */
     if (!PREACTION(fm)) {
       check_inuse_chunk(fm, p);
       if (RTCHECK(ok_address(fm, p) && ok_inuse(p))) {
@@ -3900,9 +3799,7 @@ void dlfree(void* mem) {
       POSTACTION(fm);
     }
   }
-#if !FOOTERS
 #undef fm
-#endif /* FOOTERS */
 }
 
 void* dlcalloc(size_t n_elements, size_t elem_size) {
@@ -4219,12 +4116,6 @@ static size_t internal_bulk_free(mstate m, void* array[], size_t nelem) {
       if (mem != 0) {
         mchunkptr p = mem2chunk(mem);
         size_t psize = chunksize(p);
-#if FOOTERS
-        if (get_mstate_for(p) != m) {
-          ++unfreed;
-          continue;
-        }
-#endif
         check_inuse_chunk(m, p);
         *a = 0;
         if (RTCHECK(ok_address(m, p) && ok_inuse(p))) {
@@ -4251,48 +4142,6 @@ static size_t internal_bulk_free(mstate m, void* array[], size_t nelem) {
   return unfreed;
 }
 
-/* Traversal */
-#if MALLOC_INSPECT_ALL
-static void internal_inspect_all(mstate m,
-                                 void(*handler)(void *start,
-                                                void *end,
-                                                size_t used_bytes,
-                                                void* callback_arg),
-                                 void* arg) {
-  if (is_initialized(m)) {
-    mchunkptr top = m->top;
-    msegmentptr s;
-    for (s = &m->seg; s != 0; s = s->next) {
-      mchunkptr q = align_as_chunk(s->base);
-      while (segment_holds(s, q) && q->head != FENCEPOST_HEAD) {
-        mchunkptr next = next_chunk(q);
-        size_t sz = chunksize(q);
-        size_t used;
-        void* start;
-        if (is_inuse(q)) {
-          used = sz - CHUNK_OVERHEAD; /* must not be mmapped */
-          start = chunk2mem(q);
-        }
-        else {
-          used = 0;
-          if (is_small(sz)) {     /* offset by possible bookkeeping */
-            start = (void*)((char*)q + sizeof(struct malloc_chunk));
-          }
-          else {
-            start = (void*)((char*)q + sizeof(struct malloc_tree_chunk));
-          }
-        }
-        if (start < (void*)next)  /* skip if all space is bookkeeping */
-          handler(start, next, used, arg);
-        if (q == top)
-          break;
-        q = next;
-      }
-    }
-  }
-}
-#endif /* MALLOC_INSPECT_ALL */
-
 /* ------------------ Exported realloc, memalign, etc -------------------- */
 
 void* dlrealloc(void* oldmem, size_t bytes) {
@@ -4311,15 +4160,7 @@ void* dlrealloc(void* oldmem, size_t bytes) {
   else {
     size_t nb = request2size(bytes);
     mchunkptr oldp = mem2chunk(oldmem);
-#if ! FOOTERS
     mstate m = gm;
-#else /* FOOTERS */
-    mstate m = get_mstate_for(oldp);
-    if (!ok_magic(m)) {
-      USAGE_ERROR_ACTION(m, oldmem);
-      return 0;
-    }
-#endif /* FOOTERS */
     if (!PREACTION(m)) {
       mchunkptr newp = try_realloc_chunk(m, oldp, nb, 1);
       POSTACTION(m);
@@ -4349,15 +4190,7 @@ void* dlrealloc_in_place(void* oldmem, size_t bytes) {
     else {
       size_t nb = request2size(bytes);
       mchunkptr oldp = mem2chunk(oldmem);
-#if ! FOOTERS
       mstate m = gm;
-#else /* FOOTERS */
-      mstate m = get_mstate_for(oldp);
-      if (!ok_magic(m)) {
-        USAGE_ERROR_ACTION(m, oldmem);
-        return 0;
-      }
-#endif /* FOOTERS */
       if (!PREACTION(m)) {
         mchunkptr newp = try_realloc_chunk(m, oldp, nb, 0);
         POSTACTION(m);
@@ -4430,20 +4263,6 @@ size_t dlbulk_free(void* array[], size_t nelem) {
   return internal_bulk_free(gm, array, nelem);
 }
 
-#if MALLOC_INSPECT_ALL
-void dlmalloc_inspect_all(void(*handler)(void *start,
-                                         void *end,
-                                         size_t used_bytes,
-                                         void* callback_arg),
-                          void* arg) {
-  ensure_initialization();
-  if (!PREACTION(gm)) {
-    internal_inspect_all(gm, handler, arg);
-    POSTACTION(gm);
-  }
-}
-#endif /* MALLOC_INSPECT_ALL */
-
 int dlmalloc_trim(size_t pad) {
   int result = 0;
   ensure_initialization();
@@ -4490,314 +4309,3 @@ size_t dlmalloc_usable_size(void* mem) {
   }
   return 0;
 }
-
-/* -------------------- Alternative MORECORE functions ------------------- */
-
-/*
-  Guidelines for creating a custom version of MORECORE:
-
-  * For best performance, MORECORE should allocate in multiples of pagesize.
-  * MORECORE may allocate more memory than requested. (Or even less,
-      but this will usually result in a malloc failure.)
-  * MORECORE must not allocate memory when given argument zero, but
-      instead return one past the end address of memory from previous
-      nonzero call.
-  * For best performance, consecutive calls to MORECORE with positive
-      arguments should return increasing addresses, indicating that
-      space has been contiguously extended.
-  * Even though consecutive calls to MORECORE need not return contiguous
-      addresses, it must be OK for malloc'ed chunks to span multiple
-      regions in those cases where they do happen to be contiguous.
-  * MORECORE need not handle negative arguments -- it may instead
-      just return MFAIL when given negative arguments.
-      Negative arguments are always multiples of pagesize. MORECORE
-      must not misinterpret negative args as large positive unsigned
-      args. You can suppress all such calls from even occurring by defining
-      MORECORE_CANNOT_TRIM,
-
-  As an example alternative MORECORE, here is a custom allocator
-  kindly contributed for pre-OSX macOS.  It uses virtually but not
-  necessarily physically contiguous non-paged memory (locked in,
-  present and won't get swapped out).  You can use it by uncommenting
-  this section, adding some #includes, and setting up the appropriate
-  defines above:
-
-      #define MORECORE osMoreCore
-
-  There is also a shutdown routine that should somehow be called for
-  cleanup upon program exit.
-
-  #define MAX_POOL_ENTRIES 100
-  #define MINIMUM_MORECORE_SIZE  (64 * 1024U)
-  static int next_os_pool;
-  void *our_os_pools[MAX_POOL_ENTRIES];
-
-  void *osMoreCore(int size)
-  {
-    void *ptr = 0;
-    static void *sbrk_top = 0;
-
-    if (size > 0)
-    {
-      if (size < MINIMUM_MORECORE_SIZE)
-         size = MINIMUM_MORECORE_SIZE;
-      if (CurrentExecutionLevel() == kTaskLevel)
-         ptr = PoolAllocateResident(size + RM_PAGE_SIZE, 0);
-      if (ptr == 0)
-      {
-        return (void *) MFAIL;
-      }
-      // save ptrs so they can be freed during cleanup
-      our_os_pools[next_os_pool] = ptr;
-      next_os_pool++;
-      ptr = (void *) ((((size_t) ptr) + RM_PAGE_MASK) & ~RM_PAGE_MASK);
-      sbrk_top = (char *) ptr + size;
-      return ptr;
-    }
-    else if (size < 0)
-    {
-      // we don't currently support shrink behavior
-      return (void *) MFAIL;
-    }
-    else
-    {
-      return sbrk_top;
-    }
-  }
-
-  // cleanup any allocated memory pools
-  // called as last thing before shutting down driver
-
-  void osCleanupMem(void)
-  {
-    void **ptr;
-
-    for (ptr = our_os_pools; ptr < &our_os_pools[MAX_POOL_ENTRIES]; ptr++)
-      if (*ptr)
-      {
-         PoolDeallocate(*ptr);
-         *ptr = 0;
-      }
-  }
-
-*/
-
-
-/* -----------------------------------------------------------------------
-History:
-    v2.8.6 Wed Aug 29 06:57:58 2012  Doug Lea
-      * fix bad comparison in dlposix_memalign
-      * don't reuse adjusted asize in sys_alloc
-      * add LOCK_AT_FORK -- thanks to Kirill Artamonov for the suggestion
-      * reduce compiler warnings -- thanks to all who reported/suggested these
-
-    v2.8.5 Sun May 22 10:26:02 2011  Doug Lea  (dl at gee)
-      * Always perform unlink checks unless INSECURE
-      * Add posix_memalign.
-      * Improve realloc to expand in more cases; expose realloc_in_place.
-        Thanks to Peter Buhr for the suggestion.
-      * Add footprint_limit, inspect_all, bulk_free. Thanks
-        to Barry Hayes and others for the suggestions.
-      * Internal refactorings to avoid calls while holding locks
-      * Use non-reentrant locks by default. Thanks to Roland McGrath
-        for the suggestion.
-      * Small fixes to mspace_destroy, reset_on_error.
-      * Various configuration extensions/changes. Thanks
-         to all who contributed these.
-
-    V2.8.4a Thu Apr 28 14:39:43 2011 (dl at gee.cs.oswego.edu)
-      * Update Creative Commons URL
-
-    V2.8.4 Wed May 27 09:56:23 2009  Doug Lea  (dl at gee)
-      * Use zeros instead of prev foot for is_mmapped
-      * Add mspace_track_large_chunks; thanks to Jean Brouwers
-      * Fix set_inuse in internal_realloc; thanks to Jean Brouwers
-      * Fix insufficient sys_alloc padding when using 16byte alignment
-      * Fix bad error check in mspace_footprint
-      * Adaptations for ptmalloc; thanks to Wolfram Gloger.
-      * Reentrant spin locks; thanks to Earl Chew and others
-      * Win32 improvements; thanks to Niall Douglas and Earl Chew
-      * Add NO_SEGMENT_TRAVERSAL and MAX_RELEASE_CHECK_RATE options
-      * Extension hook in malloc_state
-      * Various small adjustments to reduce warnings on some compilers
-      * Various configuration extensions/changes for more platforms. Thanks
-         to all who contributed these.
-
-    V2.8.3 Thu Sep 22 11:16:32 2005  Doug Lea  (dl at gee)
-      * Add max_footprint functions
-      * Ensure all appropriate literals are size_t
-      * Fix conditional compilation problem for some #define settings
-      * Avoid concatenating segments with the one provided
-        in create_mspace_with_base
-      * Rename some variables to avoid compiler shadowing warnings
-      * Use explicit lock initialization.
-      * Better handling of sbrk interference.
-      * Simplify and fix segment insertion, trimming and mspace_destroy
-      * Reinstate REALLOC_ZERO_BYTES_FREES option from 2.7.x
-      * Thanks especially to Dennis Flanagan for help on these.
-
-    V2.8.2 Sun Jun 12 16:01:10 2005  Doug Lea  (dl at gee)
-      * Fix memalign brace error.
-
-    V2.8.1 Wed Jun  8 16:11:46 2005  Doug Lea  (dl at gee)
-      * Fix improper #endif nesting in C++
-      * Add explicit casts needed for C++
-
-    V2.8.0 Mon May 30 14:09:02 2005  Doug Lea  (dl at gee)
-      * Use trees for large bins
-      * Support mspaces
-      * Use segments to unify sbrk-based and mmap-based system allocation,
-        removing need for emulation on most platforms without sbrk.
-      * Default safety checks
-      * Optional footer checks. Thanks to William Robertson for the idea.
-      * Internal code refactoring
-      * Incorporate suggestions and platform-specific changes.
-        Thanks to Dennis Flanagan, Colin Plumb, Niall Douglas,
-        Aaron Bachmann,  Emery Berger, and others.
-      * Speed up non-fastbin processing enough to remove fastbins.
-      * Remove useless cfree() to avoid conflicts with other apps.
-      * Remove internal memcpy, memset. Compilers handle builtins better.
-      * Remove some options that no one ever used and rename others.
-
-    V2.7.2 Sat Aug 17 09:07:30 2002  Doug Lea  (dl at gee)
-      * Fix malloc_state bitmap array misdeclaration
-
-    V2.7.1 Thu Jul 25 10:58:03 2002  Doug Lea  (dl at gee)
-      * Allow tuning of FIRST_SORTED_BIN_SIZE
-      * Use PTR_UINT as type for all ptr->int casts. Thanks to John Belmonte.
-      * Better detection and support for non-contiguousness of MORECORE.
-        Thanks to Andreas Mueller, Conal Walsh, and Wolfram Gloger
-      * Bypass most of malloc if no frees. Thanks To Emery Berger.
-      * Fix freeing of old top non-contiguous chunk im sysmalloc.
-      * Raised default trim and map thresholds to 256K.
-      * Fix mmap-related #defines. Thanks to Lubos Lunak.
-      * Fix copy macros; added LACKS_FCNTL_H. Thanks to Neal Walfield.
-      * Branch-free bin calculation
-      * Default trim and mmap thresholds now 256K.
-
-    V2.7.0 Sun Mar 11 14:14:06 2001  Doug Lea  (dl at gee)
-      * Introduce independent_comalloc and independent_calloc.
-        Thanks to Michael Pachos for motivation and help.
-      * Make optional .h file available
-      * Allow > 2GB requests on 32bit systems.
-      * new WIN32 sbrk, mmap, munmap, lock code from <Walter@GeNeSys-e.de>.
-        Thanks also to Andreas Mueller <a.mueller at paradatec.de>,
-        and Anonymous.
-      * Allow override of MALLOC_ALIGNMENT (Thanks to Ruud Waij for
-        helping test this.)
-      * memalign: check alignment arg
-      * realloc: don't try to shift chunks backwards, since this
-        leads to  more fragmentation in some programs and doesn't
-        seem to help in any others.
-      * Collect all cases in malloc requiring system memory into sysmalloc
-      * Use mmap as backup to sbrk
-      * Place all internal state in malloc_state
-      * Introduce fastbins (although similar to 2.5.1)
-      * Many minor tunings and cosmetic improvements
-      * Introduce USE_PUBLIC_MALLOC_WRAPPERS, USE_MALLOC_LOCK
-      * Introduce MALLOC_FAILURE_ACTION, MORECORE_CONTIGUOUS
-        Thanks to Tony E. Bennett <tbennett@nvidia.com> and others.
-      * Include errno.h to support default failure action.
-
-    V2.6.6 Sun Dec  5 07:42:19 1999  Doug Lea  (dl at gee)
-      * return null for negative arguments
-      * Added Several WIN32 cleanups from Martin C. Fong <mcfong at yahoo.com>
-         * Add 'LACKS_SYS_PARAM_H' for those systems without 'sys/param.h'
-          (e.g. WIN32 platforms)
-         * Cleanup header file inclusion for WIN32 platforms
-         * Cleanup code to avoid Microsoft Visual C++ compiler complaints
-         * Add 'USE_DL_PREFIX' to quickly allow co-existence with existing
-           memory allocation routines
-         * Set 'malloc_getpagesize' for WIN32 platforms (needs more work)
-         * Use 'assert' rather than 'ASSERT' in WIN32 code to conform to
-           usage of 'assert' in non-WIN32 code
-         * Improve WIN32 'sbrk()' emulation's 'findRegion()' routine to
-           avoid infinite loop
-      * Always call 'fREe()' rather than 'free()'
-
-    V2.6.5 Wed Jun 17 15:57:31 1998  Doug Lea  (dl at gee)
-      * Fixed ordering problem with boundary-stamping
-
-    V2.6.3 Sun May 19 08:17:58 1996  Doug Lea  (dl at gee)
-      * Added pvalloc, as recommended by H.J. Liu
-      * Added 64bit pointer support mainly from Wolfram Gloger
-      * Added anonymously donated WIN32 sbrk emulation
-      * Malloc, calloc, getpagesize: add optimizations from Raymond Nijssen
-      * malloc_extend_top: fix mask error that caused wastage after
-        foreign sbrks
-      * Add linux mremap support code from HJ Liu
-
-    V2.6.2 Tue Dec  5 06:52:55 1995  Doug Lea  (dl at gee)
-      * Integrated most documentation with the code.
-      * Add support for mmap, with help from
-        Wolfram Gloger (Gloger@lrz.uni-muenchen.de).
-      * Use last_remainder in more cases.
-      * Pack bins using idea from  colin@nyx10.cs.du.edu
-      * Use ordered bins instead of best-fit threshhold
-      * Eliminate block-local decls to simplify tracing and debugging.
-      * Support another case of realloc via move into top
-      * Fix error occuring when initial sbrk_base not word-aligned.
-      * Rely on page size for units instead of SBRK_UNIT to
-        avoid surprises about sbrk alignment conventions.
-      * Add mallinfo, mallopt. Thanks to Raymond Nijssen
-        (raymond@es.ele.tue.nl) for the suggestion.
-      * Add `pad' argument to malloc_trim and top_pad mallopt parameter.
-      * More precautions for cases where other routines call sbrk,
-        courtesy of Wolfram Gloger (Gloger@lrz.uni-muenchen.de).
-      * Added macros etc., allowing use in linux libc from
-        H.J. Lu (hjl@gnu.ai.mit.edu)
-      * Inverted this history list
-
-    V2.6.1 Sat Dec  2 14:10:57 1995  Doug Lea  (dl at gee)
-      * Re-tuned and fixed to behave more nicely with V2.6.0 changes.
-      * Removed all preallocation code since under current scheme
-        the work required to undo bad preallocations exceeds
-        the work saved in good cases for most test programs.
-      * No longer use return list or unconsolidated bins since
-        no scheme using them consistently outperforms those that don't
-        given above changes.
-      * Use best fit for very large chunks to prevent some worst-cases.
-      * Added some support for debugging
-
-    V2.6.0 Sat Nov  4 07:05:23 1995  Doug Lea  (dl at gee)
-      * Removed footers when chunks are in use. Thanks to
-        Paul Wilson (wilson@cs.texas.edu) for the suggestion.
-
-    V2.5.4 Wed Nov  1 07:54:51 1995  Doug Lea  (dl at gee)
-      * Added malloc_trim, with help from Wolfram Gloger
-        (wmglo@Dent.MED.Uni-Muenchen.DE).
-
-    V2.5.3 Tue Apr 26 10:16:01 1994  Doug Lea  (dl at g)
-
-    V2.5.2 Tue Apr  5 16:20:40 1994  Doug Lea  (dl at g)
-      * realloc: try to expand in both directions
-      * malloc: swap order of clean-bin strategy;
-      * realloc: only conditionally expand backwards
-      * Try not to scavenge used bins
-      * Use bin counts as a guide to preallocation
-      * Occasionally bin return list chunks in first scan
-      * Add a few optimizations from colin@nyx10.cs.du.edu
-
-    V2.5.1 Sat Aug 14 15:40:43 1993  Doug Lea  (dl at g)
-      * faster bin computation & slightly different binning
-      * merged all consolidations to one part of malloc proper
-         (eliminating old malloc_find_space & malloc_clean_bin)
-      * Scan 2 returns chunks (not just 1)
-      * Propagate failure in realloc if malloc returns 0
-      * Add stuff to allow compilation on non-ANSI compilers
-          from kpv@research.att.com
-
-    V2.5 Sat Aug  7 07:41:59 1993  Doug Lea  (dl at g.oswego.edu)
-      * removed potential for odd address access in prev_chunk
-      * removed dependency on getpagesize.h
-      * misc cosmetics and a bit more internal documentation
-      * anticosmetics: mangled names in macros to evade debugger strangeness
-      * tested on sparc, hp-700, dec-mips, rs6000
-          with gcc & native cc (hp, dec only) allowing
-          Detlefs & Zorn comparison study (in SIGPLAN Notices.)
-
-    Trial version Fri Aug 28 13:14:29 1992  Doug Lea  (dl at g.oswego.edu)
-      * Based loosely on libg++-1.2X malloc. (It retains some of the overall
-         structure of old version,  but most details differ.)
-
-*/
