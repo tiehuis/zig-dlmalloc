@@ -1,6 +1,7 @@
 #ifndef DLMALLOC_H
 #define DLMALLOC_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -73,5 +74,21 @@ struct malloc_params {
 };
 
 DLMALLOC_EXPORT void __type_export_workaround(struct malloc_chunk a, struct malloc_tree_chunk b, struct malloc_segment c, struct malloc_state d, struct malloc_params e, uint8_t f[], uint8_t g[]);
+DLMALLOC_EXPORT bool is_aligned(void * a);
+DLMALLOC_EXPORT uintptr_t align_offset(uintptr_t a);
+DLMALLOC_EXPORT void * chunk2mem(void * p);
+DLMALLOC_EXPORT struct malloc_chunk * mem2chunk(void * p);
+DLMALLOC_EXPORT struct malloc_chunk * align_as_chunk(void * p);
+DLMALLOC_EXPORT uintptr_t pad_request(uintptr_t a);
+DLMALLOC_EXPORT uintptr_t request2size(uintptr_t a);
+DLMALLOC_EXPORT bool cinuse(struct malloc_chunk * p);
+DLMALLOC_EXPORT bool pinuse(struct malloc_chunk * p);
+DLMALLOC_EXPORT bool flag4inuse(struct malloc_chunk * p);
+DLMALLOC_EXPORT bool is_inuse(struct malloc_chunk * p);
+DLMALLOC_EXPORT bool is_mmapped(struct malloc_chunk * p);
+DLMALLOC_EXPORT uintptr_t chunksize(struct malloc_chunk * p);
+DLMALLOC_EXPORT void clear_pinuse(struct malloc_chunk * p);
+DLMALLOC_EXPORT void set_flag4(struct malloc_chunk * p);
+DLMALLOC_EXPORT void clear_flag4(struct malloc_chunk * p);
 
 #endif

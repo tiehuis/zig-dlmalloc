@@ -20,7 +20,7 @@ pub const malloc_chunk = extern struct {
     bk: ?&malloc_chunk,
 };
 
-const chunk = malloc_chunk;
+const mchunk = malloc_chunk;
 const mchunkptr = ?&malloc_chunk;
 const sbinptr = ?&malloc_chunk;      // type of bins of chunks
 const bindex_t = c_uint;
@@ -55,6 +55,7 @@ const msegmentptr = ?&malloc_segment;
 
 // Only used as a dependent
 // TODO: Platform dependent.
+const CHUNK_OVERHEAD = @sizeOf(usize);
 const MALLOC_ALIGNMENT = 2 * @sizeOf(?&c_void); // This is exported incorrectly
 const CHUNK_ALIGN_MASK = MALLOC_ALIGNMENT - 1;
 
@@ -114,3 +115,114 @@ export fn __type_export_workaround(
     g: [3][5]u8,
 )
 {}
+
+// --------------------------------------------------------------
+
+//#define is_aligned(A)       (((size_t)((A)) & (CHUNK_ALIGN_MASK)) == 0)
+export fn is_aligned(a: ?&c_void) -> bool {
+    const q = @ptrToInt(a);
+    return q & CHUNK_ALIGN_MASK == 0;
+}
+
+//#define align_offset(A)\
+// ((((size_t)(A) & CHUNK_ALIGN_MASK) == 0)? 0 :\
+//  ((MALLOC_ALIGNMENT - ((size_t)(A) & CHUNK_ALIGN_MASK)) & CHUNK_ALIGN_MASK))
+export fn align_offset(a: usize) -> usize {
+    if (a & CHUNK_ALIGN_MASK == 0) {
+        return 0;
+    } else {
+        return (MALLOC_ALIGNMENT - (a & CHUNK_ALIGN_MASK)) & CHUNK_ALIGN_MASK;
+    }
+}
+
+// #define chunk2mem(p)        ((void*)((char*)(p)       + TWO_SIZE_T_SIZES))
+export fn chunk2mem(p: ?&c_void) -> ?&c_void {
+    const q = @ptrToInt(p);
+    return @intToPtr(?&c_void, q + 2 * @sizeOf(usize));
+}
+
+//#define mem2chunk(mem)      ((mchunkptr)((char*)(mem) - TWO_SIZE_T_SIZES))
+export fn mem2chunk(p: ?&c_void) -> ?&malloc_chunk {
+    const q = @ptrToInt(p);
+    return @intToPtr(?&malloc_chunk, q - 2 * @sizeOf(usize));
+}
+
+//#define align_as_chunk(A)   (mchunkptr)((A) + align_offset(chunk2mem(A)))
+export fn align_as_chunk(p: ?&c_void) -> ?&malloc_chunk {
+    const q = @ptrToInt(p);
+    const aoff = @ptrToInt(chunk2mem(p));
+    return @intToPtr(?&malloc_chunk, q + align_offset(aoff));
+}
+
+const MAX_REQUEST = (-MIN_CHUNK_SIZE << 2);
+const MIN_REQUEST = (MIN_CHUNK_SIZE - CHUNK_OVERHEAD - 1);
+const MIN_CHUNK_SIZE = (@sizeOf(malloc_chunk) + CHUNK_ALIGN_MASK) & ~usize(CHUNK_ALIGN_MASK);
+
+//#define pad_request(req) \
+//   (((req) + CHUNK_OVERHEAD + CHUNK_ALIGN_MASK) & ~CHUNK_ALIGN_MASK)
+export fn pad_request(a: usize) -> usize {
+    return (a + CHUNK_OVERHEAD + CHUNK_ALIGN_MASK) & ~usize(CHUNK_ALIGN_MASK);
+}
+
+//#define request2size(req) \
+//  (((req) < MIN_REQUEST)? MIN_CHUNK_SIZE : pad_request(req))
+export fn request2size(a: usize) -> usize {
+    if (a < MIN_REQUEST) {
+        return MIN_CHUNK_SIZE;
+    } else {
+        return pad_request(a);
+    }
+}
+
+// --- Bits
+
+const PINUSE_BIT = usize(1);
+const CINUSE_BIT = usize(2);
+const FLAG4_BIT = usize(4);
+const INUSE_BITS = PINUSE_BIT | CINUSE_BIT;
+const FLAG_BITS = PINUSE_BIT|CINUSE_BIT|FLAG4_BIT;
+
+const FENCEPOST_HEAD = INUSE_BITS | @sizeOf(usize);
+
+// #define cinuse(p)           ((p)->head & CINUSE_BIT)
+export fn cinuse(p: ?&malloc_chunk) -> bool {
+    return (??p).head & CINUSE_BIT != 0;
+}
+
+// #define pinuse(p)           ((p)->head & PINUSE_BIT)
+export fn pinuse(p: ?&malloc_chunk) -> bool {
+    return (??p).head & PINUSE_BIT != 0;
+}
+
+// #define flag4inuse(p)       ((p)->head & FLAG4_BIT)
+export fn flag4inuse(p: ?&malloc_chunk) -> bool {
+    return (??p).head & FLAG4_BIT != 0;
+}
+
+// #define is_inuse(p)         (((p)->head & INUSE_BITS) != PINUSE_BIT)
+export fn is_inuse(p: ?&malloc_chunk) -> bool {
+    return (??p).head & INUSE_BITS != PINUSE_BIT;
+}
+
+// #define is_mmapped(p)       (((p)->head & INUSE_BITS) == 0)
+export fn is_mmapped(p: ?&malloc_chunk) -> bool {
+    return (??p).head & INUSE_BITS == 0;
+}
+
+// #define chunksize(p)        ((p)->head & ~(FLAG_BITS))
+export fn chunksize(p: ?&malloc_chunk) -> usize {
+    return (??p).head & ~(FLAG_BITS);
+}
+// 
+// #define clear_pinuse(p)     ((p)->head &= ~PINUSE_BIT)
+export fn clear_pinuse(p: ?&malloc_chunk) {
+    (??p).head &= ~PINUSE_BIT;
+}
+// #define set_flag4(p)        ((p)->head |= FLAG4_BIT)
+export fn set_flag4(p: ?&malloc_chunk) {
+    return (??p).head |= FLAG4_BIT;
+}
+// #define clear_flag4(p)      ((p)->head &= ~FLAG4_BIT)
+export fn clear_flag4(p: ?&malloc_chunk) {
+    return (??p).head &= ~FLAG4_BIT;
+}
