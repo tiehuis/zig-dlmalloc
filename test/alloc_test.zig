@@ -26,7 +26,7 @@ pub fn testcase(comptime name: []const u8, allocator: &std.mem.Allocator) -> %vo
     warn("{} allocator ({})\n", name, usize(n));
     warn("\n");
     const s = timestamp();
-    try tree.testAllocator(n, std.heap.c_allocator);
+    try tree.testAllocator(n, allocator);
     const e = timestamp();
     warn("\n");
     warn("  took {} seconds\n", elapsedSeconds(e - s));
