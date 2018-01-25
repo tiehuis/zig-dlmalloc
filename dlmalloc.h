@@ -72,6 +72,6 @@ struct malloc_params {
     unsigned int default_mflags;
 };
 
-DLMALLOC_EXPORT void __type_export_workaround(struct malloc_chunk a, struct malloc_tree_chunk b, struct malloc_segment c, struct malloc_state d, struct malloc_params e, uint8_t f[]);
+DLMALLOC_EXPORT void __type_export_workaround(struct malloc_chunk a, struct malloc_tree_chunk b, struct malloc_segment c, struct malloc_state d, struct malloc_params e, uint8_t f[], uint8_t g[]);
 
 #endif

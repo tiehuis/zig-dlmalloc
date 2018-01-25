@@ -20,12 +20,12 @@ pub const malloc_chunk = extern struct {
     bk: ?&malloc_chunk,
 };
 
-extern const chunk = malloc_chunk;
-extern const mchunkptr = ?&malloc_chunk;
-extern const sbinptr = ?&malloc_chunk;      // type of bins of chunks
-extern const bindex_t = c_uint;
-extern const binmap_t = c_uint;
-extern const flag_t = c_uint;               // type of various bit flag sets
+const chunk = malloc_chunk;
+const mchunkptr = ?&malloc_chunk;
+const sbinptr = ?&malloc_chunk;      // type of bins of chunks
+const bindex_t = c_uint;
+const binmap_t = c_uint;
+const flag_t = c_uint;               // type of various bit flag sets
 
 pub const malloc_tree_chunk = extern struct {
     // first four fields must be compatible with malloc_chunk
@@ -39,9 +39,9 @@ pub const malloc_tree_chunk = extern struct {
     index: bindex_t,
 };
 
-extern const tchunk = malloc_tree_chunk;
-extern const tchunkptr = ?&malloc_tree_chunk;
-extern const tbinptr = ?&malloc_tree_chunk;     // type of bins of trees
+const tchunk = malloc_tree_chunk;
+const tchunkptr = ?&malloc_tree_chunk;
+const tbinptr = ?&malloc_tree_chunk;     // type of bins of trees
 
 pub const malloc_segment = extern struct {
     base: ?&u8,             // base address
@@ -50,8 +50,8 @@ pub const malloc_segment = extern struct {
     sflags: flag_t          // mmap and extern flag
 };
 
-extern const msegment = malloc_segment;
-extern const msegmentptr = ?&malloc_segment;
+const msegment = malloc_segment;
+const msegmentptr = ?&malloc_segment;
 
 // Only used as a dependent
 // TODO: Platform dependent.
@@ -111,5 +111,6 @@ export fn __type_export_workaround(
     d: malloc_state,
     e: malloc_params,
     f: [3]u8,
+    g: [3][5]u8,
 )
 {}

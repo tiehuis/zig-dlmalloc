@@ -90,9 +90,6 @@ typedef struct malloc_state*    mstate;
 #ifndef ABORT_ON_ASSERT_FAILURE
 #define ABORT_ON_ASSERT_FAILURE 1
 #endif  /* ABORT_ON_ASSERT_FAILURE */
-#ifndef PROCEED_ON_ERROR
-#define PROCEED_ON_ERROR 0
-#endif  /* PROCEED_ON_ERROR */
 
 #ifndef HAVE_MMAP
 #define HAVE_MMAP 1
@@ -825,19 +822,6 @@ static int has_segment_link(mstate m, msegmentptr ss) {
   useful in custom actions that try to help diagnose errors.
 */
 
-#if PROCEED_ON_ERROR
-
-/* A count of the number of corruption errors causing resets */
-int malloc_corruption_error_count;
-
-/* default corruption action */
-static void reset_on_error(mstate m);
-
-#define CORRUPTION_ERROR_ACTION(m)  reset_on_error(m)
-#define USAGE_ERROR_ACTION(m, p)
-
-#else /* PROCEED_ON_ERROR */
-
 #ifndef CORRUPTION_ERROR_ACTION
 #define CORRUPTION_ERROR_ACTION(m) ABORT
 #endif /* CORRUPTION_ERROR_ACTION */
@@ -845,8 +829,6 @@ static void reset_on_error(mstate m);
 #ifndef USAGE_ERROR_ACTION
 #define USAGE_ERROR_ACTION(m,p) ABORT
 #endif /* USAGE_ERROR_ACTION */
-
-#endif /* PROCEED_ON_ERROR */
 
 
 /* -------------------------- Debugging setup ---------------------------- */
@@ -1801,25 +1783,6 @@ static void init_bins(mstate m) {
     bin->fd = bin->bk = bin;
   }
 }
-
-#if PROCEED_ON_ERROR
-
-/* default corruption action */
-static void reset_on_error(mstate m) {
-  int i;
-  ++malloc_corruption_error_count;
-  /* Reinitialize fields to forget about all memory */
-  m->smallmap = m->treemap = 0;
-  m->dvsize = m->topsize = 0;
-  m->seg.base = 0;
-  m->seg.size = 0;
-  m->seg.next = 0;
-  m->top = m->dv = 0;
-  for (i = 0; i < NTREEBINS; ++i)
-    *treebin_at(m, i) = 0;
-  init_bins(m);
-}
-#endif /* PROCEED_ON_ERROR */
 
 /* Allocate chunk and prepend remainder with chunk in successor base. */
 static void* prepend_alloc(mstate m, char* newbase, char* oldbase,
