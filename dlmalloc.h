@@ -90,5 +90,15 @@ DLMALLOC_EXPORT uintptr_t chunksize(struct malloc_chunk * p);
 DLMALLOC_EXPORT void clear_pinuse(struct malloc_chunk * p);
 DLMALLOC_EXPORT void set_flag4(struct malloc_chunk * p);
 DLMALLOC_EXPORT void clear_flag4(struct malloc_chunk * p);
+DLMALLOC_EXPORT struct malloc_chunk * chunk_plus_offset(struct malloc_chunk * p, uintptr_t s);
+DLMALLOC_EXPORT struct malloc_chunk * chunk_minus_offset(struct malloc_chunk * p, uintptr_t s);
+DLMALLOC_EXPORT struct malloc_chunk * next_chunk(struct malloc_chunk * p);
+DLMALLOC_EXPORT struct malloc_chunk * prev_chunk(struct malloc_chunk * p);
+DLMALLOC_EXPORT bool next_pinuse(struct malloc_chunk * p);
+DLMALLOC_EXPORT uintptr_t get_foot(struct malloc_chunk * p, uintptr_t s);
+DLMALLOC_EXPORT void set_foot(struct malloc_chunk * p, uintptr_t s);
+DLMALLOC_EXPORT void set_size_and_pinuse_of_free_chunk(struct malloc_chunk * p, uintptr_t s);
+DLMALLOC_EXPORT void set_free_with_pinuse(struct malloc_chunk * p, uintptr_t s, struct malloc_chunk * n);
+DLMALLOC_EXPORT uintptr_t overhead_for(struct malloc_chunk * p);
 
 #endif

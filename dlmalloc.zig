@@ -157,6 +157,9 @@ const MAX_REQUEST = (-MIN_CHUNK_SIZE << 2);
 const MIN_REQUEST = (MIN_CHUNK_SIZE - CHUNK_OVERHEAD - 1);
 const MIN_CHUNK_SIZE = (@sizeOf(malloc_chunk) + CHUNK_ALIGN_MASK) & ~usize(CHUNK_ALIGN_MASK);
 
+const MMAP_CHUNK_OVERHEAD = 2 * @sizeOf(usize);
+const MMAP_FOOT_PAD = 4 * @sizeOf(usize);
+
 //#define pad_request(req) \
 //   (((req) + CHUNK_OVERHEAD + CHUNK_ALIGN_MASK) & ~CHUNK_ALIGN_MASK)
 export fn pad_request(a: usize) usize {
@@ -227,3 +230,73 @@ export fn set_flag4(p: ?&malloc_chunk) void {
 export fn clear_flag4(p: ?&malloc_chunk) void {
     return (??p).head &= ~FLAG4_BIT;
 }
+
+// ---- Head foot
+
+//#define chunk_plus_offset(p, s)  ((mchunkptr)(((char*)(p)) + (s)))
+export fn chunk_plus_offset(p: ?&malloc_chunk, s: usize) ?&malloc_chunk {
+    const q = @ptrToInt(p);
+    return @intToPtr(?&malloc_chunk, q + s);
+}
+
+//#define chunk_minus_offset(p, s) ((mchunkptr)(((char*)(p)) - (s)))
+export fn chunk_minus_offset(p: ?&malloc_chunk, s: usize) ?&malloc_chunk {
+    const q = @ptrToInt(p);
+    return @intToPtr(?&malloc_chunk, q - s);
+}
+
+//#define next_chunk(p) ((mchunkptr)( ((char*)(p)) + ((p)->head & ~FLAG_BITS)))
+export fn next_chunk(p: ?&malloc_chunk) ?&malloc_chunk {
+    const q = @ptrToInt(p);
+    return @intToPtr(?&malloc_chunk, q + ((??p).head & ~FLAG_BITS));
+}
+
+//#define prev_chunk(p) ((mchunkptr)( ((char*)(p)) - ((p)->prev_foot) ))
+export fn prev_chunk(p: ?&malloc_chunk) ?&malloc_chunk {
+    const q = @ptrToInt(p);
+    return @intToPtr(?&malloc_chunk, q - (??p).prev_foot);
+}
+
+//#define next_pinuse(p)  ((next_chunk(p)->head) & PINUSE_BIT)
+export fn next_pinuse(p: ?&malloc_chunk) bool {
+    return ((??next_chunk(p)).head & PINUSE_BIT) != 0;
+}
+
+//#define get_foot(p, s)  (((mchunkptr)((char*)(p) + (s)))->prev_foot)
+export fn get_foot(p: ?&malloc_chunk, s: usize) usize {
+    const q = @ptrToInt(p);
+    const f = @intToPtr(?&malloc_chunk, q + s);
+    return (??f).prev_foot;
+}
+
+//#define set_foot(p, s)  (((mchunkptr)((char*)(p) + (s)))->prev_foot = (s))
+export fn set_foot(p: ?&malloc_chunk, s: usize) void {
+    const q = @ptrToInt(p);
+    const f = @intToPtr(?&malloc_chunk, q + s);
+    (??f).prev_foot = s;
+}
+
+//#define set_size_and_pinuse_of_free_chunk(p, s)\
+//  ((p)->head = (s|PINUSE_BIT), set_foot(p, s))
+export fn set_size_and_pinuse_of_free_chunk(p: ?&malloc_chunk, s: usize) void {
+    (??p).head = s | PINUSE_BIT;
+    set_foot(p, s);
+}
+
+//#define set_free_with_pinuse(p, s, n)\
+//  (clear_pinuse(n), set_size_and_pinuse_of_free_chunk(p, s))
+export fn set_free_with_pinuse(p: ?&malloc_chunk, s: usize, n: ?&malloc_chunk) void {
+    clear_pinuse(n);
+    set_size_and_pinuse_of_free_chunk(p, s);
+}
+
+//#define overhead_for(p)\
+// (is_mmapped(p)? MMAP_CHUNK_OVERHEAD : CHUNK_OVERHEAD)
+export fn overhead_for(p: ?&malloc_chunk) usize {
+    if (is_mmapped(p)) {
+        return MMAP_CHUNK_OVERHEAD;
+    } else {
+        return CHUNK_OVERHEAD;
+    }
+}
+

@@ -597,33 +597,6 @@ static FORCEINLINE int win32munmap(void* ptr, size_t size) {
 /* Head value for fenceposts */
 #define FENCEPOST_HEAD      (INUSE_BITS|SIZE_T_SIZE)
 
-/* Treat space at ptr +/- offset as a chunk */
-#define chunk_plus_offset(p, s)  ((mchunkptr)(((char*)(p)) + (s)))
-#define chunk_minus_offset(p, s) ((mchunkptr)(((char*)(p)) - (s)))
-
-/* Ptr to next or previous physical malloc_chunk. */
-#define next_chunk(p) ((mchunkptr)( ((char*)(p)) + ((p)->head & ~FLAG_BITS)))
-#define prev_chunk(p) ((mchunkptr)( ((char*)(p)) - ((p)->prev_foot) ))
-
-/* extract next chunk's pinuse bit */
-#define next_pinuse(p)  ((next_chunk(p)->head) & PINUSE_BIT)
-
-/* Get/set size at footer */
-#define get_foot(p, s)  (((mchunkptr)((char*)(p) + (s)))->prev_foot)
-#define set_foot(p, s)  (((mchunkptr)((char*)(p) + (s)))->prev_foot = (s))
-
-/* Set size, pinuse bit, and foot */
-#define set_size_and_pinuse_of_free_chunk(p, s)\
-  ((p)->head = (s|PINUSE_BIT), set_foot(p, s))
-
-/* Set size, pinuse bit, foot, and clear next pinuse */
-#define set_free_with_pinuse(p, s, n)\
-  (clear_pinuse(n), set_size_and_pinuse_of_free_chunk(p, s))
-
-/* Get the internal overhead associated with chunk p */
-#define overhead_for(p)\
- (is_mmapped(p)? MMAP_CHUNK_OVERHEAD : CHUNK_OVERHEAD)
-
 /* Return true if malloced space is not necessarily cleared */
 #if MMAP_CLEARS
 #define calloc_must_clear(p) (!is_mmapped(p))
