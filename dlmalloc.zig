@@ -13,6 +13,13 @@
 //          Check before installing!
 //----------------------------------------------------------------------------
 
+// --- Globals
+// TODO: Need to be zeroed explicitly since c static forces zero.
+export var mparams: malloc_params = undefined;
+export var _gm_: malloc_state = undefined;
+
+// --- Types
+
 pub const malloc_chunk = extern struct {
     prev_foot: usize,       // size of previous chunk (if free)
     head: usize,            // size and inuse bits

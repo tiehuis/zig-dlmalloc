@@ -609,15 +609,13 @@ static FORCEINLINE int win32munmap(void* ptr, size_t size) {
 
 /* ------------- Global malloc_state and malloc_params ------------------- */
 
-// TODO: Sharing global state is a bit annoying. We need to share this variable
-// between zig and c since we use the global state in the core functions.
-static struct malloc_params mparams;
+extern struct malloc_params mparams;
 
 /* Ensure mparams initialized */
 #define ensure_initialization() (void)(mparams.magic != 0 || init_mparams())
 
 /* The global malloc_state used for all non-"mspace" calls */
-static struct malloc_state _gm_;
+extern struct malloc_state _gm_;
 #define gm                 (&_gm_)
 #define is_global(M)       ((M) == &_gm_)
 
