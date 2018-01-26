@@ -18,6 +18,8 @@
 export var mparams: malloc_params = undefined;
 export var _gm_: malloc_state = undefined;
 
+const gm = &_gm_;
+
 // --- Types
 
 pub const malloc_chunk = extern struct {
@@ -101,6 +103,11 @@ pub const malloc_state = extern struct {
 };
 
 extern const mstate = ?&malloc_state;
+
+//#define is_initialized(M)  ((M)->top != 0)
+export fn is_initialized(m: ?&malloc_state) bool {
+    return (??m).top != null;
+}
 
 pub const malloc_params = extern struct {
     magic: usize,

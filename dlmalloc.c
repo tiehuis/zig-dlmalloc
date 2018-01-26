@@ -40,7 +40,6 @@ typedef struct malloc_state*    mstate;
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <tchar.h>
-#define HAVE_MMAP 1
 #define HAVE_MORECORE 0
 #define LACKS_UNISTD_H
 #define LACKS_SYS_PARAM_H
@@ -66,7 +65,6 @@ typedef struct malloc_state*    mstate;
 /* Mac OSX docs advise not to use sbrk; it seems better to use mmap */
 #ifndef HAVE_MORECORE
 #define HAVE_MORECORE 0
-#define HAVE_MMAP 1
 /* OSX allocators provide 16 byte alignment */
 #ifndef MALLOC_ALIGNMENT
 #define MALLOC_ALIGNMENT ((size_t)16U)
@@ -91,9 +89,6 @@ typedef struct malloc_state*    mstate;
 #define ABORT_ON_ASSERT_FAILURE 1
 #endif  /* ABORT_ON_ASSERT_FAILURE */
 
-#ifndef HAVE_MMAP
-#define HAVE_MMAP 1
-#endif  /* HAVE_MMAP */
 #ifndef MMAP_CLEARS
 #define MMAP_CLEARS 1
 #endif  /* MMAP_CLEARS */
@@ -132,18 +127,10 @@ typedef struct malloc_state*    mstate;
 #endif  /* DEFAULT_TRIM_THRESHOLD */
 
 #ifndef DEFAULT_MMAP_THRESHOLD
-#if HAVE_MMAP
 #define DEFAULT_MMAP_THRESHOLD ((size_t)256U * (size_t)1024U)
-#else   /* HAVE_MMAP */
-#define DEFAULT_MMAP_THRESHOLD MAX_SIZE_T
-#endif  /* HAVE_MMAP */
 #endif  /* DEFAULT_MMAP_THRESHOLD */
 #ifndef MAX_RELEASE_CHECK_RATE
-#if HAVE_MMAP
 #define MAX_RELEASE_CHECK_RATE 4095
-#else
-#define MAX_RELEASE_CHECK_RATE MAX_SIZE_T
-#endif /* HAVE_MMAP */
 #endif /* MAX_RELEASE_CHECK_RATE */
 #ifndef USE_BUILTIN_FFS
 #define USE_BUILTIN_FFS 0
@@ -284,7 +271,7 @@ size_t dlmalloc_usable_size(void*);
 #include <strings.h>     /* for ffs */
 #endif /* LACKS_STRINGS_H */
 #endif /* USE_BUILTIN_FFS */
-#if HAVE_MMAP
+
 #ifndef LACKS_SYS_MMAN_H
 /* On some versions of linux, mremap decl in mman.h needs __USE_GNU set */
 #if (defined(linux) && !defined(__USE_GNU))
@@ -295,10 +282,11 @@ size_t dlmalloc_usable_size(void*);
 #include <sys/mman.h>    /* for mmap */
 #endif /* linux */
 #endif /* LACKS_SYS_MMAN_H */
+
 #ifndef LACKS_FCNTL_H
 #include <fcntl.h>
 #endif /* LACKS_FCNTL_H */
-#endif /* HAVE_MMAP */
+
 #ifndef LACKS_UNISTD_H
 #include <unistd.h>     /* for sbrk, sysconf */
 #else /* LACKS_UNISTD_H */
@@ -400,8 +388,6 @@ unsigned char _BitScanReverse(unsigned long *index, unsigned long mask);
 #define MFAIL                ((void*)(MAX_SIZE_T))
 #define CMFAIL               ((char*)(MFAIL)) /* defined for convenience */
 
-#if HAVE_MMAP
-
 #ifndef WIN32
 #define MUNMAP_DEFAULT(a, s)  munmap((a), (s))
 #define MMAP_PROT            (PROT_READ|PROT_WRITE)
@@ -463,7 +449,6 @@ static FORCEINLINE int win32munmap(void* ptr, size_t size) {
 #define MUNMAP_DEFAULT(a, s)        win32munmap((a), (s))
 #define DIRECT_MMAP_DEFAULT(s)      win32direct_mmap(s)
 #endif /* WIN32 */
-#endif /* HAVE_MMAP */
 
 #if HAVE_MREMAP
 #ifndef WIN32
@@ -487,7 +472,6 @@ static FORCEINLINE int win32munmap(void* ptr, size_t size) {
 /**
  * Define CALL_MMAP/CALL_MUNMAP/CALL_DIRECT_MMAP
  */
-#if HAVE_MMAP
     #define USE_MMAP_BIT            (SIZE_T_ONE)
 
     #ifdef MMAP
@@ -505,29 +489,19 @@ static FORCEINLINE int win32munmap(void* ptr, size_t size) {
     #else /* DIRECT_MMAP */
         #define CALL_DIRECT_MMAP(s) DIRECT_MMAP_DEFAULT(s)
     #endif /* DIRECT_MMAP */
-#else  /* HAVE_MMAP */
-    #define USE_MMAP_BIT            (SIZE_T_ZERO)
-
-    #define MMAP(s)                 MFAIL
-    #define MUNMAP(a, s)            (-1)
-    #define DIRECT_MMAP(s)          MFAIL
-    #define CALL_DIRECT_MMAP(s)     DIRECT_MMAP(s)
-    #define CALL_MMAP(s)            MMAP(s)
-    #define CALL_MUNMAP(a, s)       MUNMAP((a), (s))
-#endif /* HAVE_MMAP */
 
 /**
  * Define CALL_MREMAP
  */
-#if HAVE_MMAP && HAVE_MREMAP
+#if HAVE_MREMAP
     #ifdef MREMAP
         #define CALL_MREMAP(addr, osz, nsz, mv) MREMAP((addr), (osz), (nsz), (mv))
     #else /* MREMAP */
         #define CALL_MREMAP(addr, osz, nsz, mv) MREMAP_DEFAULT((addr), (osz), (nsz), (mv))
     #endif /* MREMAP */
-#else  /* HAVE_MMAP && HAVE_MREMAP */
+#else  /* HAVE_MREMAP */
     #define CALL_MREMAP(addr, osz, nsz, mv)     MFAIL
-#endif /* HAVE_MMAP && HAVE_MREMAP */
+#endif /* HAVE_MREMAP */
 
 /* mstate bit set if continguous morecore disabled or failed */
 #define USE_NONCONTIGUOUS_BIT (4U)
@@ -617,9 +591,6 @@ extern struct malloc_params mparams;
 /* The global malloc_state used for all non-"mspace" calls */
 extern struct malloc_state _gm_;
 #define gm                 (&_gm_)
-#define is_global(M)       ((M) == &_gm_)
-
-#define is_initialized(M)  ((M)->top != 0)
 
 /* -------------------------- system alloc setup ------------------------- */
 
@@ -627,11 +598,7 @@ extern struct malloc_state _gm_;
 
 #define use_mmap(M)           ((M)->mflags &   USE_MMAP_BIT)
 #define enable_mmap(M)        ((M)->mflags |=  USE_MMAP_BIT)
-#if HAVE_MMAP
 #define disable_mmap(M)       ((M)->mflags &= ~USE_MMAP_BIT)
-#else
-#define disable_mmap(M)
-#endif
 
 #define use_noncontiguous(M)  ((M)->mflags &   USE_NONCONTIGUOUS_BIT)
 #define disable_contiguous(M) ((M)->mflags |=  USE_NONCONTIGUOUS_BIT)
@@ -1590,7 +1557,7 @@ static void* sys_alloc(mstate m, size_t nb) {
     RELEASE_MALLOC_GLOBAL_LOCK();
   }
 
-  if (HAVE_MMAP && tbase == CMFAIL) {  /* Try MMAP */
+  if (tbase == CMFAIL) {  /* Try MMAP */
     char* mp = (char*)(CALL_MMAP(asize));
     if (mp != CMFAIL) {
       tbase = mp;
@@ -1631,14 +1598,7 @@ static void* sys_alloc(mstate m, size_t nb) {
       m->magic = mparams.magic;
       m->release_checks = MAX_RELEASE_CHECK_RATE;
       init_bins(m);
-      if (is_global(m))
-        init_top(m, (mchunkptr)tbase, tsize - TOP_FOOT_SIZE);
-      else
-      {
-        /* Offset top by embedded malloc_state */
-        mchunkptr mn = next_chunk(mem2chunk(m));
-        init_top(m, mn, (size_t)((tbase + tsize) - (char*)mn) -TOP_FOOT_SIZE);
-      }
+      init_top(m, (mchunkptr)tbase, tsize - TOP_FOOT_SIZE);
     }
 
     else {
@@ -1754,8 +1714,7 @@ static int sys_trim(mstate m, size_t pad) {
 
       if (!is_extern_segment(sp)) {
         if (is_mmapped_segment(sp)) {
-          if (HAVE_MMAP &&
-              sp->size >= extra &&
+          if (sp->size >= extra &&
               !has_segment_link(m, sp)) { /* can't shrink if pinned */
             size_t newsize = sp->size - extra;
             (void)newsize; /* placate people compiling -Wunused-variable */
@@ -1793,7 +1752,6 @@ static int sys_trim(mstate m, size_t pad) {
     }
 
     /* Unmap any unused mmapped segments */
-    if (HAVE_MMAP)
       released += release_unused_segments(m);
 
     /* On failure, disable autotrim to avoid repeated failed future calls */

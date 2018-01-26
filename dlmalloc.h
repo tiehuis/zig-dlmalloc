@@ -73,6 +73,7 @@ struct malloc_params {
     unsigned int default_mflags;
 };
 
+DLMALLOC_EXPORT bool is_initialized(struct malloc_state * m);
 DLMALLOC_EXPORT void __type_export_workaround(struct malloc_chunk a, struct malloc_tree_chunk b, struct malloc_segment c, struct malloc_state d, struct malloc_params e, uint8_t f[], uint8_t g[]);
 DLMALLOC_EXPORT bool is_aligned(void * a);
 DLMALLOC_EXPORT uintptr_t align_offset(uintptr_t a);
