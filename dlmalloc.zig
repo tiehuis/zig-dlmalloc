@@ -332,3 +332,8 @@ export fn segment_holds(s: ?&malloc_segment, a: ?&malloc_chunk) bool {
     const sbase = @ptrToInt((??s).base);
     return abase >= sbase and abase < sbase + (??s).size;
 }
+
+//#define should_trim(M,s)  (0)
+export fn should_trim(m: ?&malloc_state, s: usize) bool {
+    return false;
+}

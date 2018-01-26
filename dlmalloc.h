@@ -104,5 +104,6 @@ DLMALLOC_EXPORT struct malloc_tree_chunk * leftmost_child(struct malloc_tree_chu
 DLMALLOC_EXPORT bool is_mmapped_segment(struct malloc_segment * s);
 DLMALLOC_EXPORT bool is_extern_segment(struct malloc_segment * s);
 DLMALLOC_EXPORT bool segment_holds(struct malloc_segment * s, struct malloc_chunk * a);
+DLMALLOC_EXPORT bool should_trim(struct malloc_state * m, uintptr_t s);
 
 #endif
