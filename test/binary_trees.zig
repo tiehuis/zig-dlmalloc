@@ -6,7 +6,7 @@ const TreeNode = struct {
     l: ?&TreeNode,
     r: ?&TreeNode,
 
-    pub fn new(a: &Allocator, l: ?&TreeNode, r: ?&TreeNode) -> &TreeNode {
+    pub fn new(a: &Allocator, l: ?&TreeNode, r: ?&TreeNode) &TreeNode {
         var node = a.create(TreeNode) catch unreachable;
         node.l = l;
         node.r = r;
@@ -14,12 +14,12 @@ const TreeNode = struct {
         return node;
     }
 
-    pub fn free(self: &TreeNode, a: &Allocator) {
+    pub fn free(self: &TreeNode, a: &Allocator) void {
         a.free(self);
     }
 };
 
-fn itemCheck(node: &TreeNode) -> usize {
+fn itemCheck(node: &TreeNode) usize {
     if (node.l) |left| {
         // either have both nodes or none
         return 1 + itemCheck(left) + itemCheck(??node.r);
@@ -28,7 +28,7 @@ fn itemCheck(node: &TreeNode) -> usize {
     }
 }
 
-fn bottomUpTree(a: &Allocator, depth: usize) -> &TreeNode {
+fn bottomUpTree(a: &Allocator, depth: usize) &TreeNode {
     if (depth > 0) {
         return TreeNode.new(a, bottomUpTree(a, depth - 1), bottomUpTree(a, depth - 1));
     } else {
@@ -36,7 +36,7 @@ fn bottomUpTree(a: &Allocator, depth: usize) -> &TreeNode {
     }
 }
 
-fn deleteTree(a: &Allocator, node: &TreeNode) {
+fn deleteTree(a: &Allocator, node: &TreeNode) void {
     if (node.l) |left| {
         // either have both nodes or none
         deleteTree(a, left);
@@ -46,7 +46,7 @@ fn deleteTree(a: &Allocator, node: &TreeNode) {
     a.destroy(node);
 }
 
-pub fn testAllocator(comptime n: usize, allocator: &Allocator) -> %void {
+pub fn testAllocator(comptime n: usize, allocator: &Allocator) %void {
     const min_depth: usize = 4;
     const max_depth: usize = n;
     const stretch_depth = max_depth + 1;
