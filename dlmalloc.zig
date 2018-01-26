@@ -300,3 +300,35 @@ export fn overhead_for(p: ?&malloc_chunk) usize {
     }
 }
 
+
+//#define leftmost_child(t) ((t)->child[0] != 0? (t)->child[0] : (t)->child[1])
+export fn leftmost_child(t: ?&malloc_tree_chunk) ?&malloc_tree_chunk {
+    if ((??t).child[0] != null) {
+        return (??t).child[0];
+    } else {
+        return (??t).child[1];
+    }
+}
+
+// TODO: For now assume MMAP while shared
+const USE_MMAP_BIT = usize(1);
+const USE_NONCONTIGUOUS_BIT = usize(4);
+const EXTERN_BIT = usize(8);
+
+//#define is_mmapped_segment(S)  ((S)->sflags & USE_MMAP_BIT)
+export fn is_mmapped_segment(s: ?&malloc_segment) bool {
+    return ((??s).sflags & USE_MMAP_BIT) != 0;
+}
+
+//#define is_extern_segment(S)   ((S)->sflags & EXTERN_BIT)
+export fn is_extern_segment(s: ?&malloc_segment) bool {
+    return ((??s).sflags & EXTERN_BIT) != 0;
+}
+
+//#define segment_holds(S, A)\
+//  ((char*)(A) >= S->base && (char*)(A) < S->base + S->size)
+export fn segment_holds(s: ?&malloc_segment, a: ?&malloc_chunk) bool {
+    const abase = @ptrToInt(a);
+    const sbase = @ptrToInt((??s).base);
+    return abase >= sbase and abase < sbase + (??s).size;
+}

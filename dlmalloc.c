@@ -126,13 +126,11 @@ typedef struct malloc_state*    mstate;
 #define DEFAULT_GRANULARITY ((size_t)64U * (size_t)1024U)
 #endif  /* MORECORE_CONTIGUOUS */
 #endif  /* DEFAULT_GRANULARITY */
+
 #ifndef DEFAULT_TRIM_THRESHOLD
-#ifndef MORECORE_CANNOT_TRIM
 #define DEFAULT_TRIM_THRESHOLD ((size_t)2U * (size_t)1024U * (size_t)1024U)
-#else   /* MORECORE_CANNOT_TRIM */
-#define DEFAULT_TRIM_THRESHOLD MAX_SIZE_T
-#endif  /* MORECORE_CANNOT_TRIM */
 #endif  /* DEFAULT_TRIM_THRESHOLD */
+
 #ifndef DEFAULT_MMAP_THRESHOLD
 #if HAVE_MMAP
 #define DEFAULT_MMAP_THRESHOLD ((size_t)256U * (size_t)1024U)
@@ -604,16 +602,6 @@ static FORCEINLINE int win32munmap(void* ptr, size_t size) {
 #define calloc_must_clear(p) (1)
 #endif /* MMAP_CLEARS */
 
-/* ---------------------- Overlaid data structures ----------------------- */
-
-
-/* A little helper macro for trees */
-#define leftmost_child(t) ((t)->child[0] != 0? (t)->child[0] : (t)->child[1])
-
-/* ----------------------------- Segments -------------------------------- */
-
-#define is_mmapped_segment(S)  ((S)->sflags & USE_MMAP_BIT)
-#define is_extern_segment(S)   ((S)->sflags & EXTERN_BIT)
 
 /* ---------------------------- malloc_state ----------------------------- */
 
@@ -629,6 +617,8 @@ static FORCEINLINE int win32munmap(void* ptr, size_t size) {
 
 /* ------------- Global malloc_state and malloc_params ------------------- */
 
+// TODO: Sharing global state is a bit annoying. We need to share this variable
+// between zig and c since we use the global state in the core functions.
 static struct malloc_params mparams;
 
 /* Ensure mparams initialized */
@@ -645,10 +635,6 @@ static struct malloc_state _gm_;
 
 /* Operations on mflags */
 
-#define use_lock(M)           ((M)->mflags &   USE_LOCK_BIT)
-#define enable_lock(M)        ((M)->mflags |=  USE_LOCK_BIT)
-#define disable_lock(M)
-
 #define use_mmap(M)           ((M)->mflags &   USE_MMAP_BIT)
 #define enable_mmap(M)        ((M)->mflags |=  USE_MMAP_BIT)
 #if HAVE_MMAP
@@ -659,11 +645,6 @@ static struct malloc_state _gm_;
 
 #define use_noncontiguous(M)  ((M)->mflags &   USE_NONCONTIGUOUS_BIT)
 #define disable_contiguous(M) ((M)->mflags |=  USE_NONCONTIGUOUS_BIT)
-
-#define set_lock(M,L)\
- ((M)->mflags = (L)?\
-  ((M)->mflags | USE_LOCK_BIT) :\
-  ((M)->mflags & ~USE_LOCK_BIT))
 
 /* page-align a size */
 #define page_align(S)\
@@ -690,10 +671,6 @@ static struct malloc_state _gm_;
 #define is_granularity_aligned(S)\
    (((size_t)(S) & (mparams.granularity - SIZE_T_ONE)) == 0)
 
-/*  True if segment S holds address A */
-#define segment_holds(S, A)\
-  ((char*)(A) >= S->base && (char*)(A) < S->base + S->size)
-
 /* Return segment holding given address */
 static msegmentptr segment_holding(mstate m, char* addr) {
   msegmentptr sp = &m->seg;
@@ -715,12 +692,6 @@ static int has_segment_link(mstate m, msegmentptr ss) {
       return 0;
   }
 }
-
-#ifndef MORECORE_CANNOT_TRIM
-#define should_trim(M,s)  ((s) > (M)->trim_check)
-#else  /* MORECORE_CANNOT_TRIM */
-#define should_trim(M,s)  (0)
-#endif /* MORECORE_CANNOT_TRIM */
 
 /*
   TOP_FOOT_SIZE is padding at the end of a segment, including space
