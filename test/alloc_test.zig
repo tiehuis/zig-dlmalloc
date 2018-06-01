@@ -22,7 +22,7 @@ pub fn elapsedSeconds(diff: u64) f64 {
 // max depth of the tree
 const n = 15;
 
-pub fn testcase(comptime name: []const u8, allocator: &std.mem.Allocator) %void {
+pub fn testcase(comptime name: []const u8, allocator: *std.mem.Allocator) !void {
     warn("{} allocator ({})\n", name, usize(n));
     warn("\n");
     const s = timestamp();
@@ -33,7 +33,7 @@ pub fn testcase(comptime name: []const u8, allocator: &std.mem.Allocator) %void 
     warn("\n\n");
 }
 
-pub fn main() %void {
+pub fn main() !void {
     try testcase("c", std.heap.c_allocator);
     try testcase("dlmalloc", dlmalloc.dlmalloc_allocator);
 }
